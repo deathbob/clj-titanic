@@ -1,6 +1,8 @@
 (ns clj-titanic.core
+  (:require [clojure.math.numeric-tower :as math])
   (:require [clojure-csv.core :as csv])
   )
+
 
 (def read-train
   (csv/parse-csv (slurp "data/train.csv")))
@@ -10,10 +12,10 @@
 
 (defn column
   [n xs]
-  (rest (map read-string (remove clojure.string/blank? (map #(nth % n) xs)))))
+  (rest (remove clojure.string/blank? (map #(nth % n) xs))))
 
 (defn ages[xs]
-  (column 4 xs))
+  (map read-string (column 5 xs)))
 
 (defn mean
   [xs]
@@ -33,7 +35,7 @@
   (println "Hello, World!"))
 
 (defn p-survived[xs]
-  (let [sur (column 0 xs)]
+  (let [sur (map read-string(column 1 xs))]
     ( / (reduce + sur) (count sur))))
 
 (defn p-died[xs]
@@ -96,21 +98,20 @@
     (/ p-b-a (+ p-b-a ppp))))
 
 (def survivors
-  (filter #(= "1" (first %)) (rest read-train)))
+  (filter #(= "1" (second %)) (rest read-train)))
 
 (def died
-  (filter #(= "0" (first %)) (rest read-train)))
+  (filter #(= "0" (second %)) (rest read-train)))
 
 (def name-freqs-of-survivors
-  (frequencies (re-seq #"\w+" (clojure.string/join " " (map #(nth % 2) survivors)))))
+  (frequencies (re-seq #"\w+" (clojure.string/join " " (map #(nth % 3) survivors)))))
 
 (def name-freqs-of-died
-  (frequencies (re-seq #"\w+" (clojure.string/join " " (map #(nth % 2) died)))))
+  (frequencies (re-seq #"\w+" (clojure.string/join " " (map #(nth % 3) died)))))
 
 (defn combine-probabilities
   "(combine-probabilities (vector (probability-survived-given-age 47 ) (prob-by-full-name \"Kelly, Mr. James\")))"
   [arr]
-  (prn arr)
   (let [pt (reduce * arr)
         ft (reduce * (map #(- 1 %) arr))]
     (if (empty? arr)
@@ -139,8 +140,66 @@
     ))
 
 
+(defn predict-by-name
+  []
+  (map #(if (> % 0.2) 1 0 )(map prob-by-full-name (column 2 read-test))))
 
 
+(defn train-row-to-map[[passenger-id survived pclass name sex age sibsp parch ticket fare cabin embarked]]
+  (hash-map
+   :passenger-id passenger-id
+   :survived survived
+   :pclass pclass
+   :name name
+   :sex sex
+   :age age
+   :sibsp sibsp
+   :parch parch
+   :ticket ticket
+   :fare fare
+   :cabin cabin
+   :embarked embarked))
+
+
+(defn safe-read-string[str]
+  (if (clojure.string/blank? str)
+    0
+    (read-string str)))
+
+
+(defn test-row-to-map[[passenger-id pclass name sex age sibsp parch ticket fare cabin embarked]]
+  (hash-map
+   :passenger-id passenger-id
+   :pclass (read-string pclass)
+   :name name
+   :sex sex
+   :age   (safe-read-string age)
+   :sibsp (safe-read-string sibsp)
+   :parch (safe-read-string parch)
+   :fare  (safe-read-string fare)
+   :ticket ticket
+   :cabin cabin
+   :embarked embarked))
+
+
+(defn predict-by-h20
+  [mp]
+  (let [male-true (if (= (mp :sex) "male") 1 0)
+        interior (- (+
+     (* -2.63484 male-true)
+     (* -1.24224  (mp :pclass))
+     (* -0.04395  (mp :age))
+     (* -0.37575  (mp :sibsp))
+     (* -0.06193  (mp :parch))
+     (* 0.00216   (mp :fare))
+     5.389003))
+        probability (/ 1 (+ 1 (math/expt 2.71828 interior)))]
+    (if (> probability 0.5) 1 0)
+    ))
+
+
+(defn do-h20-pred[]
+  (map predict-by-h20 (map test-row-to-map (rest read-test))))
 
 
 
@@ -149,3 +208,9 @@
 
 ;P(survived|age) = (probability somebody of a similar age survived) * (probability of survival) /
 ;foo + (probability somebody of similar age died) * (probability of death)
+
+
+; (spit "asdf.csv" (apply str (map #(str (clojure.string/join "," %) "\n") (map vector (range 892 1310) (predict-by-name)))))
+
+
+;(spit "qwer.csv" (apply str (map #(str (clojure.string/join "," %) "\n") (map vector (map first (rest read-test)) (do-h20-pred)))))

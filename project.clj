@@ -6,5 +6,6 @@
   :dependencies [
                  [org.clojure/clojure "1.5.1"]
                  [clojure-csv/clojure-csv "2.0.0-alpha1"]
+                 [org.clojure/math.numeric-tower "0.0.2"]
                  ]
   :main clj-titanic.core)
